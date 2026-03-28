@@ -135,7 +135,7 @@ export default function App() {
     try {
       const arrayBuffer = await selectedFile.arrayBuffer();
       const imageSize = BigInt(arrayBuffer.byteLength);
-      const result = await actor.analyzeFood(imageSize, "");
+      const result = await actor.analyzeFood(imageSize, selectedFile.name);
       setAnalysis(result);
 
       // Add initial AI response to chat
@@ -196,7 +196,10 @@ export default function App() {
       const imageSize = selectedFile
         ? BigInt((await selectedFile.arrayBuffer()).byteLength)
         : BigInt(0);
-      const result = await actor.analyzeFood(imageSize, message);
+      const textQuery = selectedFile
+        ? `${selectedFile.name} ${message}`
+        : message;
+      const result = await actor.analyzeFood(imageSize, textQuery);
       const aiMsg: ChatMessage = {
         id: crypto.randomUUID(),
         role: "assistant",

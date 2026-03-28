@@ -5,6 +5,7 @@ import Time "mo:core/Time";
 import Runtime "mo:core/Runtime";
 import Order "mo:core/Order";
 import Int "mo:core/Int";
+import Text "mo:core/Text";
 import MixinStorage "blob-storage/Mixin";
 import Storage "blob-storage/Storage";
 
@@ -51,6 +52,20 @@ actor {
     "Carrot",
     "Grape",
     "Mango",
+  ];
+
+  // Lowercase keywords for case-insensitive filename matching
+  let foodKeywords = [
+    "banana",
+    "apple",
+    "orange",
+    "strawberry",
+    "tomato",
+    "bread",
+    "lettuce",
+    "carrot",
+    "grape",
+    "mango",
   ];
 
   let predictions = [
@@ -106,13 +121,10 @@ actor {
     ],
   ];
 
+  // Only fresh labels — aged/overripe/stale removed
   let freshnessLabels = [
     "Very Fresh",
     "Fresh",
-    "Slightly Aged",
-    "Aged",
-    "Overripe",
-    "Stale",
   ];
 
   let thresholdMessages = [
@@ -147,7 +159,7 @@ actor {
     (
       "Strawberry",
       true,
-      "AI: Strawberries are sweet, juicy, and a fantastic source of antioxidants!",
+      "AI: Strawberries are sweet, juicy, and a fantastic source of antioxidants and vitamin C!",
     ),
     (
       "Tomato",
@@ -184,15 +196,31 @@ actor {
   var nextHistoryId = 1;
   let histories = Map.empty<Nat, HistoryRecord>();
 
-  public shared ({ caller }) func analyzeFood(imageSize : Nat, textQuery : Text) : async FoodAnalysis {
-    if (imageSize >= foods.size() * 1000) {
-      Runtime.trap("Input image too large. Please use proper AI Core instead.");
+  // Detect food index from hint text using lowercase keyword matching
+  func detectFoodFromHint(hint : Text) : ?Nat {
+    var i = 0;
+    for (keyword in foodKeywords.vals()) {
+      if (hint.contains(#text keyword)) {
+        return ?i;
+      };
+      i += 1;
     };
-    let foodIndex = imageSize % foods.size();
+    null;
+  };
+
+  public shared ({ caller }) func analyzeFood(imageSize : Nat, textQuery : Text) : async FoodAnalysis {
+    let hintMatch = detectFoodFromHint(textQuery);
+    let foodIndex = switch (hintMatch) {
+      case (?idx) idx;
+      case null { imageSize % foods.size() };
+    };
     let foodName = foods[foodIndex];
     let freshnessLabelIndex = foodIndex % freshnessLabels.size();
     let freshnessLabel = freshnessLabels[freshnessLabelIndex];
-    let confidencePercent = 85 - (foodIndex % 25);
+    // Compute confidence safely to avoid Nat underflow
+    let base : Nat = if (hintMatch != null) 93 else 85;
+    let penalty : Nat = foodIndex % 15;
+    let confidencePercent : Nat = if (base > penalty) base - penalty else base;
     let statusMessage = thresholdMessages[foodIndex];
     let topPredictions = predictions[foodIndex];
     var aiResponse = "Unknown Food";
